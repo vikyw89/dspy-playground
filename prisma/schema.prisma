@@ -1,0 +1,709 @@
+generator client {
+  provider = "prisma-client-py"
+  enable_experimental_decimal = true
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user_id           String
+  expires_in        Int?
+  ext_expires_in    Int?
+  users             users   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([user_id])
+}
+
+model Session {
+  id            String   @id
+  expires       DateTime
+  session_token String   @unique
+  user_id       String
+  users         users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model api_keys {
+  id                     String    @id @unique
+  created_at             DateTime  @default(now())
+  note                   String?
+  public_key             String    @unique
+  hashed_secret_key      String    @unique
+  display_secret_key     String
+  last_used_at           DateTime?
+  expires_at             DateTime?
+  project_id             String
+  fast_hashed_secret_key String?   @unique
+  projects               projects  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([fast_hashed_secret_key])
+  @@index([hashed_secret_key])
+  @@index([project_id])
+  @@index([public_key])
+}
+
+model audit_logs {
+  id                String   @id
+  created_at        DateTime @default(now())
+  updated_at        DateTime @default(now())
+  user_id           String
+  project_id        String?
+  resource_type     String
+  resource_id       String
+  action            String
+  before            String?
+  after             String?
+  org_id            String
+  user_org_role     String
+  user_project_role String?
+
+  @@index([created_at])
+  @@index([org_id])
+  @@index([project_id])
+  @@index([updated_at])
+  @@index([user_id])
+}
+
+model batch_exports {
+  id          String    @id
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @default(now())
+  project_id  String
+  user_id     String
+  finished_at DateTime?
+  expires_at  DateTime?
+  name        String
+  status      String
+  query       Json
+  format      String
+  url         String?
+  log         String?
+  projects    projects  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id, user_id])
+  @@index([status])
+}
+
+model comments {
+  id             String            @id
+  project_id     String
+  object_type    CommentObjectType
+  object_id      String
+  created_at     DateTime          @default(now())
+  updated_at     DateTime          @default(now())
+  content        String
+  author_user_id String?
+  projects       projects          @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id, object_type, object_id])
+}
+
+model cron_jobs {
+  name           String    @id
+  last_run       DateTime?
+  state          String?
+  job_started_at DateTime?
+}
+
+model dataset_items {
+  id                    String
+  input                 Json?
+  expected_output       Json?
+  source_observation_id String?
+  dataset_id            String
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @default(now())
+  status                DatasetStatus       @default(ACTIVE)
+  source_trace_id       String?
+  metadata              Json?
+  project_id            String
+  datasets              datasets            @relation(fields: [dataset_id, project_id], references: [id, project_id], onDelete: Cascade)
+  dataset_run_items     dataset_run_items[]
+
+  @@id([id, project_id])
+  @@index([created_at])
+  @@index([dataset_id], type: Hash)
+  @@index([source_observation_id], type: Hash)
+  @@index([source_trace_id], type: Hash)
+  @@index([updated_at])
+}
+
+model dataset_run_items {
+  id              String
+  dataset_run_id  String
+  dataset_item_id String
+  observation_id  String?
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @default(now())
+  trace_id        String
+  project_id      String
+  dataset_items   dataset_items @relation(fields: [dataset_item_id, project_id], references: [id, project_id], onDelete: Cascade)
+  dataset_runs    dataset_runs  @relation(fields: [dataset_run_id, project_id], references: [id, project_id], onDelete: Cascade)
+
+  @@id([id, project_id])
+  @@index([created_at])
+  @@index([dataset_item_id], type: Hash)
+  @@index([dataset_run_id], type: Hash)
+  @@index([observation_id], type: Hash)
+  @@index([trace_id])
+  @@index([updated_at])
+}
+
+model dataset_runs {
+  id                String
+  name              String
+  dataset_id        String
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @default(now())
+  metadata          Json?
+  description       String?
+  project_id        String
+  dataset_run_items dataset_run_items[]
+  datasets          datasets            @relation(fields: [dataset_id, project_id], references: [id, project_id], onDelete: Cascade)
+
+  @@id([id, project_id])
+  @@unique([dataset_id, project_id, name])
+  @@index([created_at])
+  @@index([dataset_id], type: Hash)
+  @@index([updated_at])
+}
+
+model datasets {
+  id            String
+  name          String
+  project_id    String
+  created_at    DateTime        @default(now())
+  updated_at    DateTime        @default(now())
+  description   String?
+  metadata      Json?
+  dataset_items dataset_items[]
+  dataset_runs  dataset_runs[]
+  projects      projects        @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@id([id, project_id])
+  @@unique([project_id, name])
+  @@index([created_at])
+  @@index([project_id], type: Hash)
+  @@index([updated_at])
+}
+
+model eval_templates {
+  id                 String               @id
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @default(now())
+  project_id         String
+  name               String
+  version            Int
+  prompt             String
+  model              String
+  model_params       Json
+  vars               String[]             @default([])
+  output_schema      Json
+  provider           String
+  projects           projects             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  job_configurations job_configurations[]
+
+  @@unique([project_id, name, version])
+  @@index([project_id, id])
+  @@index([project_id])
+}
+
+model events {
+  id         String   @id
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+  project_id String
+  data       Json
+  url        String?
+  method     String?
+  headers    Json     @default("{}")
+  projects   projects @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+}
+
+model job_configurations {
+  id               String           @id
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @default(now())
+  project_id       String
+  job_type         JobType
+  eval_template_id String?
+  score_name       String
+  filter           Json
+  target_object    String
+  variable_mapping Json
+  sampling         Decimal
+  delay            Int
+  status           JobConfigState   @default(ACTIVE)
+  eval_templates   eval_templates?  @relation(fields: [eval_template_id], references: [id])
+  projects         projects         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  job_executions   job_executions[]
+
+  @@index([project_id, id])
+  @@index([project_id])
+}
+
+model job_executions {
+  id                   String             @id
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @default(now())
+  project_id           String
+  job_configuration_id String
+  status               JobExecutionStatus
+  start_time           DateTime?
+  end_time             DateTime?
+  error                String?
+  job_input_trace_id   String?
+  job_output_score_id  String?
+  job_configurations   job_configurations @relation(fields: [job_configuration_id], references: [id], onDelete: Cascade)
+  traces               traces?            @relation(fields: [job_input_trace_id], references: [id])
+  scores               scores?            @relation(fields: [job_output_score_id], references: [id])
+  projects             projects           @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([created_at])
+  @@index([job_configuration_id])
+  @@index([job_input_trace_id])
+  @@index([job_output_score_id])
+  @@index([project_id, id])
+  @@index([project_id])
+  @@index([project_id, status])
+  @@index([updated_at])
+}
+
+model llm_api_keys {
+  id                  String   @id @unique
+  created_at          DateTime @default(now())
+  updated_at          DateTime @default(now())
+  provider            String
+  display_secret_key  String
+  secret_key          String
+  project_id          String
+  base_url            String?
+  adapter             String
+  custom_models       String[] @default([])
+  with_default_models Boolean  @default(true)
+  projects            projects @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, provider])
+  @@index([project_id, provider])
+}
+
+model membership_invitations {
+  id                 String        @id @unique
+  email              String
+  project_id         String?
+  invited_by_user_id String?
+  created_at         DateTime      @default(now())
+  updated_at         DateTime      @default(now())
+  org_id             String
+  org_role           Role
+  project_role       Role?
+  users              users?        @relation(fields: [invited_by_user_id], references: [id])
+  organizations      organizations @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  projects           projects?     @relation(fields: [project_id], references: [id])
+
+  @@index([email])
+  @@index([org_id])
+  @@index([project_id])
+}
+
+model models {
+  id               String    @id
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @default(now())
+  project_id       String?
+  model_name       String
+  match_pattern    String
+  start_date       DateTime?
+  input_price      Decimal?
+  output_price     Decimal?
+  total_price      Decimal?
+  unit             String
+  tokenizer_config Json?
+  tokenizer_id     String?
+  projects         projects? @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, model_name, start_date, unit])
+  @@index([model_name])
+  @@index([project_id, model_name])
+  @@index([project_id, model_name, start_date, unit])
+}
+
+model observations {
+  id                     String           @id
+  name                   String?
+  start_time             DateTime         @default(now())
+  end_time               DateTime?
+  parent_observation_id  String?
+  type                   ObservationType
+  trace_id               String?
+  metadata               Json?
+  model                  String?
+  modelParameters        Json?
+  input                  Json?
+  output                 Json?
+  level                  ObservationLevel @default(DEFAULT)
+  status_message         String?
+  completion_start_time  DateTime?
+  completion_tokens      Int              @default(0)
+  prompt_tokens          Int              @default(0)
+  total_tokens           Int              @default(0)
+  version                String?
+  project_id             String
+  created_at             DateTime         @default(now())
+  unit                   String?
+  prompt_id              String?
+  input_cost             Decimal?
+  output_cost            Decimal?
+  total_cost             Decimal?
+  internal_model         String?
+  updated_at             DateTime         @default(now())
+  calculated_input_cost  Decimal?
+  calculated_output_cost Decimal?
+  calculated_total_cost  Decimal?
+  internal_model_id      String?
+  projects               projects         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([id, project_id])
+  @@index([created_at])
+  @@index([internal_model])
+  @@index([model])
+  @@index([project_id])
+  @@index([project_id, internal_model, start_time, unit])
+  @@index([project_id, prompt_id])
+  @@index([project_id, start_time, type])
+  @@index([prompt_id])
+  @@index([start_time])
+  @@index([trace_id])
+  @@index([trace_id, project_id])
+  @@index([trace_id, project_id, start_time])
+  @@index([trace_id, project_id, type, start_time])
+  @@index([type])
+}
+
+model organization_memberships {
+  id                  String                @id
+  org_id              String
+  user_id             String
+  role                Role
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @default(now())
+  organizations       organizations         @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  users               users                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  project_memberships project_memberships[]
+
+  @@unique([org_id, user_id])
+  @@index([org_id])
+  @@index([user_id])
+}
+
+model organizations {
+  id                       String                     @id
+  name                     String
+  created_at               DateTime                   @default(now())
+  updated_at               DateTime                   @default(now())
+  cloud_config             Json?
+  membership_invitations   membership_invitations[]
+  organization_memberships organization_memberships[]
+  projects                 projects[]
+}
+
+model posthog_integrations {
+  project_id                String    @id
+  encrypted_posthog_api_key String
+  posthog_host_name         String
+  last_sync_at              DateTime?
+  enabled                   Boolean
+  created_at                DateTime  @default(now())
+  projects                  projects  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+}
+
+model project_memberships {
+  project_id               String
+  user_id                  String
+  created_at               DateTime                 @default(now())
+  updated_at               DateTime                 @default(now())
+  org_membership_id        String
+  role                     Role
+  organization_memberships organization_memberships @relation(fields: [org_membership_id], references: [id], onDelete: Cascade)
+  projects                 projects                 @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  users                    users                    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([project_id, user_id])
+  @@index([org_membership_id])
+  @@index([project_id])
+  @@index([user_id])
+}
+
+model projects {
+  id                     String                   @id
+  created_at             DateTime                 @default(now())
+  name                   String
+  updated_at             DateTime                 @default(now())
+  org_id                 String
+  api_keys               api_keys[]
+  batch_exports          batch_exports[]
+  comments               comments[]
+  datasets               datasets[]
+  eval_templates         eval_templates[]
+  events                 events[]
+  job_configurations     job_configurations[]
+  job_executions         job_executions[]
+  llm_api_keys           llm_api_keys[]
+  membership_invitations membership_invitations[]
+  models                 models[]
+  observations           observations[]
+  posthog_integrations   posthog_integrations?
+  project_memberships    project_memberships[]
+  organizations          organizations            @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  prompts                prompts[]
+  score_configs          score_configs[]
+  scores                 scores[]
+  trace_sessions         trace_sessions[]
+  traces                 traces[]
+
+  @@index([org_id])
+}
+
+model prompts {
+  id         String   @id
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+  project_id String
+  created_by String
+  name       String
+  version    Int
+  is_active  Boolean?
+  config     Json     @default("{}")
+  prompt     Json
+  type       String   @default("text")
+  tags       String[] @default([])
+  labels     String[] @default([])
+  projects   projects @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, name, version])
+  @@index([created_at])
+  @@index([project_id, id])
+  @@index([project_id])
+  @@index([project_id, name, version])
+  @@index([tags], type: Gin)
+  @@index([updated_at])
+}
+
+model score_configs {
+  id          String        @id
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @default(now())
+  project_id  String
+  name        String
+  data_type   ScoreDataType
+  is_archived Boolean       @default(false)
+  min_value   Float?
+  max_value   Float?
+  categories  Json?
+  description String?
+  projects    projects      @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  scores      scores[]
+
+  @@unique([id, project_id])
+  @@index([categories])
+  @@index([created_at])
+  @@index([data_type])
+  @@index([is_archived])
+  @@index([project_id])
+  @@index([updated_at])
+}
+
+model scores {
+  id             String           @id
+  timestamp      DateTime         @default(now())
+  name           String
+  value          Float?
+  observation_id String?
+  trace_id       String
+  comment        String?
+  source         ScoreSource
+  project_id     String
+  author_user_id String?
+  config_id      String?
+  data_type      ScoreDataType    @default(NUMERIC)
+  string_value   String?
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @default(now())
+  job_executions job_executions[]
+  score_configs  score_configs?   @relation(fields: [config_id], references: [id])
+  projects       projects         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([id, project_id])
+  @@index([author_user_id])
+  @@index([config_id])
+  @@index([created_at])
+  @@index([observation_id], type: Hash)
+  @@index([project_id])
+  @@index([project_id, name])
+  @@index([source])
+  @@index([timestamp])
+  @@index([trace_id], type: Hash)
+  @@index([value])
+}
+
+model sso_configs {
+  domain        String   @id
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now())
+  auth_provider String
+  auth_config   Json?
+}
+
+model trace_sessions {
+  id         String
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+  project_id String
+  bookmarked Boolean  @default(false)
+  public     Boolean  @default(false)
+  projects   projects @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  traces     traces[]
+
+  @@id([id, project_id])
+  @@index([created_at])
+  @@index([project_id])
+  @@index([updated_at])
+}
+
+model traces {
+  id             String           @id
+  timestamp      DateTime         @default(now())
+  name           String?
+  project_id     String
+  metadata       Json?
+  external_id    String?
+  user_id        String?
+  release        String?
+  version        String?
+  public         Boolean          @default(false)
+  bookmarked     Boolean          @default(false)
+  input          Json?
+  output         Json?
+  session_id     String?
+  tags           String[]         @default([])
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @default(now())
+  job_executions job_executions[]
+  projects       projects         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  trace_sessions trace_sessions?  @relation(fields: [session_id, project_id], references: [id, project_id])
+
+  @@index([created_at])
+  @@index([id, user_id])
+  @@index([name])
+  @@index([project_id])
+  @@index([project_id, timestamp])
+  @@index([session_id])
+  @@index([tags], type: Gin)
+  @@index([timestamp])
+  @@index([user_id])
+}
+
+model users {
+  id                       String                     @id
+  name                     String?
+  email                    String?                    @unique
+  email_verified           DateTime?
+  password                 String?
+  image                    String?
+  created_at               DateTime                   @default(now())
+  updated_at               DateTime                   @default(now())
+  feature_flags            String[]                   @default([])
+  admin                    Boolean                    @default(false)
+  Account                  Account[]
+  Session                  Session[]
+  membership_invitations   membership_invitations[]
+  organization_memberships organization_memberships[]
+  project_memberships      project_memberships[]
+}
+
+model verification_tokens {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum CommentObjectType {
+  TRACE
+  OBSERVATION
+  SESSION
+  PROMPT
+}
+
+enum DatasetStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum JobConfigState {
+  ACTIVE
+  INACTIVE
+}
+
+enum JobExecutionStatus {
+  COMPLETED
+  ERROR
+  PENDING
+  CANCELLED
+}
+
+enum JobType {
+  EVAL
+}
+
+enum ObservationLevel {
+  DEBUG
+  DEFAULT
+  WARNING
+  ERROR
+}
+
+enum ObservationType {
+  SPAN
+  EVENT
+  GENERATION
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+  NONE
+}
+
+enum ScoreDataType {
+  CATEGORICAL
+  NUMERIC
+  BOOLEAN
+}
+
+enum ScoreSource {
+  ANNOTATION
+  API
+  EVAL
+}
